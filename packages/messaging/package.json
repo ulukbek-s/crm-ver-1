@@ -1,0 +1,12 @@
+{
+  "name": "@platform/messaging",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": { "build": "tsc" },
+  "dependencies": {
+    "amqplib": "^0.10.3"
+  },
+  "devDependencies": { "typescript": "^5.6.0" }
+}

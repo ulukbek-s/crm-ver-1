@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": "./",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "strictPropertyInitialization": false,
+    "paths": {
+      "@platform/database": ["../../packages/database/src"],
+      "@platform/common": ["../../packages/common/src"],
+      "@platform/config": ["../../packages/config/src"]
+    }
+  },
+  "include": ["src/**/*"]
+}

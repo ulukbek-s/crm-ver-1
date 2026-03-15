@@ -1,0 +1,1101 @@
+// Platform — Enterprise HR, Migration & Education
+// 13 domains, 120+ tables, DDD
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========== DOMAIN 1 — ORGANIZATION ==========
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // holding, division, etc.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  countries Country[]
+  settings  CompanySetting[]
+}
+
+model Country {
+  id             String   @id @default(cuid())
+  name           String
+  code           String   @unique
+  organizationId String
+  directorId     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  director       User?    @relation("CountryDirector", fields: [directorId], references: [id])
+  branches       Branch[]
+  candidates     Candidate[]
+  vacancies      Vacancy[]
+  visaProcesses  VisaProcess[]
+  regions        Region[]
+  legalEntities  LegalEntity[]
+  employers      Employer[]
+  visaTypes      VisaType[]
+  documentTypes  CountryDocumentType[]
+  programs       Program[]
+}
+
+model CountryDocumentType {
+  id        String   @id @default(cuid())
+  countryId String
+  code      String   // passport, contract, cv, visa, ...
+  name      String
+  order     Int      @default(0)
+  country   Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  @@unique([countryId, code])
+}
+
+model Branch {
+  id          String   @id @default(cuid())
+  name        String
+  countryId   String
+  managerId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  country     Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  manager     User?    @relation("BranchManager", fields: [managerId], references: [id])
+  users       User[]
+  leads       Lead[]
+  candidates  Candidate[]
+  departments Department[]
+  teams       Team[]
+  offices     Office[]
+  locations   Location[]
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String
+  branchId  String?
+  createdAt DateTime @default(now())
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+  users     User[]
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  branchId  String?
+  createdAt DateTime @default(now())
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+}
+
+model Office {
+  id        String   @id @default(cuid())
+  name      String
+  branchId  String?
+  address   String?
+  createdAt DateTime @default(now())
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+}
+
+model Region {
+  id        String   @id @default(cuid())
+  name      String
+  countryId String?
+  country   Country? @relation(fields: [countryId], references: [id])
+}
+
+model Location {
+  id       String  @id @default(cuid())
+  address  String?
+  city     String?
+  country  String?
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id])
+}
+
+model LegalEntity {
+  id        String   @id @default(cuid())
+  name      String
+  taxId     String?
+  countryId String?
+  country   Country? @relation(fields: [countryId], references: [id])
+}
+
+model CompanySetting {
+  id             String       @id @default(cuid())
+  key            String
+  value          String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ========== DOMAIN 2 — USERS & ACCESS CONTROL ==========
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String?
+  firstName    String
+  lastName     String
+  phone        String?
+  avatarUrl    String?
+  userStatus   String?   // e.g. Available, Busy, In meeting
+  status       String    @default("active") // active, inactive, suspended
+  branchId     String?
+  departmentId String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  branch       Branch?   @relation(fields: [branchId], references: [id])
+  department   Department? @relation(fields: [departmentId], references: [id])
+  userRoles    UserRole[]
+  sessions     Session[]
+  auditLogs    AuditLog[]
+  apiTokens    ApiToken[]
+  loginHistory LoginHistory[]
+  userSettings UserSetting?
+  // Relations as manager/director
+  managedCountries Country[]  @relation("CountryDirector")
+  managedBranches  Branch[]   @relation("BranchManager")
+  assignedLeads    Lead[]    @relation("LeadManager")
+  assignedCandidates Candidate[] @relation("CandidateManager")
+  createdTasks   Task[]     @relation("TaskCreator")
+  assignedTasks  TaskAssignment[]
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique // Founder, CountryDirector, BranchManager, Recruiter, VisaOfficer, Teacher, Finance, Partner
+  description String?
+  createdAt   DateTime @default(now())
+  rolePermissions RolePermission[]
+  userRoles   UserRole[]
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  resource    String   // candidates, vacancies, visa, etc.
+  action      String   // create, read, update, delete, manage
+  description String?
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  @@unique([roleId, permissionId])
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  assignedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  @@unique([userId, roleId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  userAgent String?
+  ip        String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  payload    Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+}
+
+model ApiToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  name      String?
+  expiresAt DateTime?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LoginHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  success   Boolean
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSetting {
+  id     String @id @default(cuid())
+  userId String @unique
+  key    String
+  value  Json?
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ========== DOMAIN 3 — CRM CORE (LEADS) ==========
+model LeadSource {
+  id        String   @id @default(cuid())
+  name      String   // website, instagram, telegram, phone
+  code      String   @unique
+  leads     Lead[]
+}
+
+model Program {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  order     Int      @default(0)
+  countryId String?
+  country   Country? @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  price         Decimal?
+  candidatePrice Decimal?
+  requiresLanguage Boolean @default(false)
+}
+
+model LeadStatus {
+  id        String   @id @default(cuid())
+  name      String   // New lead, Contacted, Consultation scheduled, Passed initial filter, Rejected, Converted to candidate
+  code      String
+  order     Int      @default(0)
+  leads     Lead[]
+}
+
+model Lead {
+  id             String    @id @default(cuid())
+  firstName      String
+  lastName       String
+  phone          String
+  email          String?
+  sourceId       String
+  statusId       String
+  assignedManagerId String?
+  branchId       String?
+  notes          String?
+  convertedToCandidateId String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  source         LeadSource @relation(fields: [sourceId], references: [id])
+  status         LeadStatus @relation(fields: [statusId], references: [id])
+  assignedManager User?    @relation("LeadManager", fields: [assignedManagerId], references: [id])
+  branch         Branch?   @relation(fields: [branchId], references: [id])
+  notesRelation  LeadNote[]
+  activities     LeadActivity[]
+  tags           LeadTag[]
+  history        LeadHistory[]
+}
+
+model LeadNote {
+  id        String   @id @default(cuid())
+  leadId    String
+  content   String
+  authorId  String?
+  createdAt DateTime @default(now())
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model LeadActivity {
+  id        String   @id @default(cuid())
+  leadId    String
+  type      String   // call, email, meeting
+  summary   String?
+  createdAt DateTime @default(now())
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model LeadTag {
+  id     String @id @default(cuid())
+  leadId String
+  tag    String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model LeadHistory {
+  id        String   @id @default(cuid())
+  leadId    String
+  fromStatusId String?
+  toStatusId   String
+  changedAt DateTime @default(now())
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+// ========== DOMAIN 4 — CANDIDATES ==========
+model Candidate {
+  id             String   @id @default(cuid())
+  candidateCode  String   @unique
+  firstName      String
+  lastName       String
+  phone          String
+  whatsappPhone  String?
+  telegramUsername String?
+  email          String?
+  countryId      String?
+  languageLevel  String?  // planned, in_progress, A1, A2, B1, B2, C1, C2
+  programType    String?
+  managerId      String?
+  branchId       String?
+  leadId         String?
+  leadSourceId   String?
+  paymentStatus  String?  // paid, partial, overdue, none
+  pipelineStage  String   @default("candidates") // leads, candidates, employer_decision, visa_process, completed, rejected
+  anketaStatus   String?  // not_filled, accepted, rejected (Germany form)
+  anketaData     Json?    // Germany anketa form answers
+  archivedAt     DateTime?
+  archiveReason  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  country        Country? @relation(fields: [countryId], references: [id])
+  manager        User?    @relation("CandidateManager", fields: [managerId], references: [id])
+  branch         Branch?  @relation(fields: [branchId], references: [id])
+  profile        CandidateProfile?
+  languages      CandidateLanguage[]
+  documents      CandidateDocument[]
+  statusHistory  CandidateStatusHistory[]
+  notes          CandidateNote[]
+  tags           CandidateTag[]
+  communications CandidateCommunication[]
+  vacancyCandidates VacancyCandidate[]
+  visaProcesses  VisaProcess[]
+  payments       Payment[]
+  student        Student?
+}
+
+model CandidateProfile {
+  id          String   @id @default(cuid())
+  candidateId String   @unique
+  birthDate   DateTime?
+  address     String?
+  education   String?
+  experience  String?
+  skills      String?
+  cvUrl       String?
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+}
+
+model CandidateLanguage {
+  id          String   @id @default(cuid())
+  candidateId String
+  language    String
+  level       String?
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+}
+
+model CandidateDocument {
+  id          String   @id @default(cuid())
+  candidateId String
+  documentId  String
+  type        String   // passport, contract, cv, profile, visa
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model CandidateStatusHistory {
+  id          String   @id @default(cuid())
+  candidateId String
+  fromStage   String?
+  toStage     String
+  changedAt   DateTime @default(now())
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+}
+
+model CandidateNote {
+  id         String   @id @default(cuid())
+  candidateId String
+  content    String
+  authorId   String?
+  createdAt  DateTime @default(now())
+  candidate  Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+}
+
+model CandidateTag {
+  id          String   @id @default(cuid())
+  candidateId String
+  tag         String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+}
+
+model CandidateCommunication {
+  id          String   @id @default(cuid())
+  candidateId String
+  channel     String   // email, whatsapp, telegram, instagram
+  direction   String   // inbound, outbound
+  content     String?
+  messageId   String?
+  createdAt   DateTime @default(now())
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+}
+
+// ========== DOMAIN 5 — DOCUMENT MANAGEMENT ==========
+model Document {
+  id          String   @id @default(cuid())
+  type        String   // passport, contract, cv, profile, visa, employer_contract, communication, finance
+  fileName    String
+  mimeType    String?
+  storageKey  String   // S3/MinIO key
+  size        Int?
+  version     Int      @default(1)
+  status      String   @default("uploaded")
+  uploadedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  candidateDocuments CandidateDocument[]
+  documentVersions DocumentVersion[]
+  visaDocuments    VisaDocument[]
+  vacancyContractCandidates VacancyCandidate[] @relation("ContractDocument")
+  paymentReceipts  Payment[] @relation("PaymentReceipt")
+}
+
+model DocumentType {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+}
+
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  documentId String
+  version    Int
+  storageKey String
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model DocumentTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  content   String?
+  variables Json?
+}
+
+model FileStorage {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  bucket    String?
+  size      Int?
+  mimeType  String?
+  uploadedAt DateTime @default(now())
+}
+
+// ========== DOMAIN 6 — RECRUITMENT (ATS) ==========
+model Employer {
+  id        String   @id @default(cuid())
+  name      String
+  countryId String?
+  contact   String?
+  email     String?
+  createdAt DateTime @default(now())
+  country   Country? @relation(fields: [countryId], references: [id])
+  vacancies Vacancy[]
+  contacts  EmployerContact[]
+  contracts EmployerContract[]
+}
+
+model EmployerContact {
+  id        String   @id @default(cuid())
+  employerId String
+  name      String
+  role      String?
+  email     String?
+  phone     String?
+  employer  Employer @relation(fields: [employerId], references: [id], onDelete: Cascade)
+}
+
+model EmployerContract {
+  id         String   @id @default(cuid())
+  employerId String
+  documentId String?
+  validFrom  DateTime?
+  validTo    DateTime?
+  employer   Employer @relation(fields: [employerId], references: [id], onDelete: Cascade)
+}
+
+model Vacancy {
+  id             String   @id @default(cuid())
+  title          String
+  employerId     String
+  countryId      String?
+  salary         String?
+  salaryMin      Decimal?
+  salaryMax      Decimal?
+  salaryCurrency String?  @default("EUR")
+  requirements   String?
+  openPositions Int    @default(1)
+  deadline    DateTime?
+  status      String   @default("open") // open, closed, paused
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  employer    Employer @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  country     Country? @relation(fields: [countryId], references: [id])
+  vacancyCandidates VacancyCandidate[]
+  interviews  Interview[]
+  jobOffers   JobOffer[]
+}
+
+model VacancyCandidate {
+  id                 String    @id @default(cuid())
+  vacancyId          String
+  candidateId        String
+  stage              String    // pending, interview, accepted, rejected (employer statuses)
+  submittedAt        DateTime  @default(now())
+  responseAt         DateTime?
+  rejectionReason    String?
+  contractDocumentId String?
+  contractSentAt     DateTime?
+  vacancy            Vacancy   @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  candidate          Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  contractDocument   Document? @relation("ContractDocument", fields: [contractDocumentId], references: [id])
+  @@unique([vacancyId, candidateId])
+}
+
+model Interview {
+  id          String   @id @default(cuid())
+  vacancyId   String
+  candidateId String?
+  scheduledAt DateTime?
+  type        String?  // phone, video, onsite
+  status      String   @default("scheduled")
+  feedback    String?
+  vacancy     Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  feedbacks   InterviewFeedback[]
+}
+
+model InterviewFeedback {
+  id          String   @id @default(cuid())
+  interviewId String
+  rating      Int?
+  comment     String?
+  authorId    String?
+  createdAt   DateTime @default(now())
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+}
+
+model JobOffer {
+  id          String   @id @default(cuid())
+  vacancyId   String
+  candidateId String?
+  status      String   @default("pending") // pending, accepted, rejected
+  sentAt      DateTime?
+  respondedAt DateTime?
+  vacancy     Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+}
+
+// ========== DOMAIN 7 — VISA MANAGEMENT ==========
+model VisaType {
+  id        String   @id @default(cuid())
+  name      String
+  code      String
+  countryId String?
+  country   Country? @relation(fields: [countryId], references: [id])
+  visaProcesses VisaProcess[]
+}
+
+model Embassy {
+  id            String        @id @default(cuid())
+  name          String
+  country       String?
+  city          String?
+  address       String?
+}
+
+model VisaChecklistTemplate {
+  id          String   @id @default(cuid())
+  countryCode String   // DE, AT, etc.
+  code        String   // passport, cv, ...
+  name        String
+  sortOrder   Int      @default(0)
+  @@unique([countryCode, code])
+}
+
+model VisaProcess {
+  id             String   @id @default(cuid())
+  candidateId    String
+  visaTypeId     String?
+  countryId      String?
+  status         String   // contract_received, document_prep, embassy_appointment, submission, waiting_decision, approved, rejected
+  appointmentDate DateTime?
+  decisionDate   DateTime?
+  flightDate     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  visaType       VisaType? @relation(fields: [visaTypeId], references: [id])
+  country        Country? @relation(fields: [countryId], references: [id])
+  documents      VisaDocument[]
+  appointments   VisaAppointment[]
+  submissions    VisaSubmission[]
+  decisions      VisaDecision[]
+}
+
+model VisaDocument {
+  id             String   @id @default(cuid())
+  visaProcessId  String
+  documentId     String
+  type           String?
+  visaProcess    VisaProcess @relation(fields: [visaProcessId], references: [id], onDelete: Cascade)
+  document       Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model VisaAppointment {
+  id             String   @id @default(cuid())
+  visaProcessId  String
+  scheduledAt    DateTime
+  type           String?  // TLS, embassy
+  reminderSent   Boolean  @default(false)
+  visaProcess    VisaProcess @relation(fields: [visaProcessId], references: [id], onDelete: Cascade)
+}
+
+model VisaSubmission {
+  id             String   @id @default(cuid())
+  visaProcessId  String
+  submittedAt    DateTime?
+  visaProcess    VisaProcess @relation(fields: [visaProcessId], references: [id], onDelete: Cascade)
+}
+
+model VisaDecision {
+  id             String   @id @default(cuid())
+  visaProcessId  String
+  approved       Boolean
+  decisionDate   DateTime?
+  notes          String?
+  visaProcess    VisaProcess @relation(fields: [visaProcessId], references: [id], onDelete: Cascade)
+}
+
+// ========== DOMAIN 8 — EDUCATION ==========
+model Course {
+  id        String   @id @default(cuid())
+  name      String
+  language  String?  // e.g. German, English
+  level     String?  // A1, A2, B1, B2, C1
+  duration  Int?     // weeks
+  price     Decimal?
+  description String?
+  requiredForProgram String? // optional program name or code
+  createdAt DateTime @default(now())
+  modules   CourseModule[]
+  groups    StudentGroup[]
+  exams     Exam[]
+  certificates Certificate[]
+}
+
+model CourseModule {
+  id        String   @id @default(cuid())
+  courseId  String
+  name      String
+  order     Int      @default(0)
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons   Lesson[]
+}
+
+model Lesson {
+  id        String   @id @default(cuid())
+  moduleId  String
+  title     String
+  scheduledAt DateTime?
+  duration  Int?     // minutes
+  module    CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  materials LessonMaterial[]
+  attendance LessonAttendance[]
+}
+
+model LessonMaterial {
+  id       String  @id @default(cuid())
+  lessonId String
+  title    String
+  url      String?
+  lesson   Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+}
+
+model LessonAttendance {
+  id        String   @id @default(cuid())
+  lessonId  String
+  studentId String
+  present   Boolean  @default(true)
+  status    String   @default("present") // present, absent, late
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  @@unique([lessonId, studentId])
+}
+
+model Student {
+  id          String   @id @default(cuid())
+  candidateId String   @unique
+  enrolledAt  DateTime @default(now())
+  status      String   @default("enrolled") // enrolled, studying, completed, failed, dropped
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  groups      StudentGroupStudent[]
+  progress    StudentProgress[]
+  attendance  LessonAttendance[]
+  examResults ExamResult[]
+  certificates Certificate[]
+}
+
+model StudentGroup {
+  id        String   @id @default(cuid())
+  courseId  String
+  name      String
+  startDate DateTime?
+  endDate   DateTime?
+  teacherId String?
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  teacher   Teacher? @relation(fields: [teacherId], references: [id])
+  students  StudentGroupStudent[]
+  exams     Exam[]
+}
+
+model StudentGroupStudent {
+  id        String   @id @default(cuid())
+  groupId   String
+  studentId String
+  enrolledAt DateTime @default(now())
+  group     StudentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  @@unique([groupId, studentId])
+}
+
+model StudentProgress {
+  id        String   @id @default(cuid())
+  studentId String
+  level     String?
+  completedAt DateTime?
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Exam {
+  id        String   @id @default(cuid())
+  courseId  String?
+  groupId   String?
+  name      String
+  type      String?  // midterm, final, level
+  maxScore  Int?
+  date      DateTime?
+  course    Course?       @relation(fields: [courseId], references: [id])
+  group     StudentGroup? @relation(fields: [groupId], references: [id])
+}
+
+model ExamResult {
+  id        String   @id @default(cuid())
+  studentId String
+  examId    String?
+  score     Decimal?
+  passed    Boolean?
+  takenAt   DateTime @default(now())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Certificate {
+  id         String   @id @default(cuid())
+  studentId  String
+  courseId   String?
+  level      String   // B1, B2, etc.
+  issuedAt   DateTime @default(now())
+  documentId String?
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course     Course?  @relation(fields: [courseId], references: [id])
+}
+
+model Teacher {
+  id        String   @id @default(cuid())
+  userId    String?  @unique
+  name      String
+  email     String?
+  groups    StudentGroup[]
+}
+
+// ========== DOMAIN 9 — FINANCE ==========
+model Payment {
+  id            String   @id @default(cuid())
+  candidateId   String
+  amount        Decimal
+  currency      String   @default("USD")
+  method        String?  // bank, card, cash
+  status        String   @default("pending") // pending, completed, failed, refunded
+  contractPrice Decimal?
+  paidAmount    Decimal  @default(0)
+  remainingBalance Decimal?
+  dueDate       DateTime?
+  paidAt        DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  transactions  PaymentTransaction[]
+  invoiceId     String?
+  invoice       Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  receiptDocumentId String?
+  receiptDocument   Document? @relation("PaymentReceipt", fields: [receiptDocumentId], references: [id])
+}
+
+model PaymentMethod {
+  id        String   @id @default(cuid())
+  code      String
+  name      String
+}
+
+model PaymentTransaction {
+  id        String   @id @default(cuid())
+  paymentId String
+  amount    Decimal
+  type      String   // payment, refund, adjustment
+  reference String?
+  createdAt DateTime @default(now())
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+}
+
+model Invoice {
+  id             String   @id @default(cuid())
+  number         String   @unique
+  clientCompanyId String?
+  candidateId    String?
+  studentId      String?
+  serviceType    String   // LANGUAGE_COURSE, VISA_SERVICE, RECRUITMENT_SERVICE, AUSBILDUNG, OTHER
+  amount         Decimal
+  currency       String   // ISO 4217 code (EUR, USD, etc.)
+  issueDate      DateTime @default(now())
+  dueDate        DateTime?
+  status         String   @default("draft") // draft, sent, paid, overdue, cancelled
+  notes          String?
+  createdById    String?
+  contractId     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  payments       Payment[]
+  refunds        Refund[]
+  contract       Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+}
+
+model CurrencyRate {
+  id        String   @id @default(cuid())
+  fromCurrency String
+  toCurrency   String
+  rate      Decimal
+  date      DateTime @default(now())
+}
+
+model Expense {
+  id               String   @id @default(cuid())
+  category         String
+  amount           Decimal
+  currency         String
+  date             DateTime
+  description      String?
+  receiptDocumentId String?
+  employeeId       String?
+  createdById      String?
+}
+
+model SalaryPayment {
+  id               String   @id @default(cuid())
+  employeeId       String
+  baseAmount       Decimal
+  bonusAmount      Decimal?
+  deductionsAmount Decimal?
+  finalAmount      Decimal
+  currency         String
+  paymentDate      DateTime
+  status           String   @default("planned") // planned, scheduled, paid, cancelled
+  notes            String?
+  paymentId        String?
+}
+
+model Commission {
+  id               String   @id @default(cuid())
+  employeeId       String
+  candidateId      String?
+  companyId        String?
+  dealValue        Decimal
+  commissionPercent Decimal
+  commissionAmount Decimal
+  currency         String
+  status           String   @default("pending") // pending, approved, paid, cancelled
+  paymentId        String?
+  createdAt        DateTime @default(now())
+}
+
+model Contract {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  companyId   String
+  serviceType String   // LANGUAGE_COURSE, VISA_SERVICE, RECRUITMENT_SERVICE, AUSBILDUNG, OTHER
+  totalValue  Decimal
+  currency    String
+  paymentPlan String?
+  startDate   DateTime?
+  endDate     DateTime?
+  status      String   @default("draft") // draft, active, completed, cancelled
+  invoices    Invoice[]
+}
+
+model Refund {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  amount      Decimal
+  currency    String
+  reason      String?
+  date        DateTime @default(now())
+  status      String   @default("pending") // pending, completed, cancelled
+  createdById String?
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model CashFlowEntry {
+  id         String   @id @default(cuid())
+  type       String   // inflow, outflow
+  sourceType String   // invoice_payment, expense, salary, commission, refund
+  sourceId   String
+  amount     Decimal
+  currency   String
+  date       DateTime @default(now())
+}
+
+model FinanceAuditLog {
+  id         String   @id @default(cuid())
+  entityType String   // Invoice, Payment, Expense, etc.
+  entityId   String
+  action     String   // create, update, delete, status_change
+  changes    Json?
+  userId     String?
+  createdAt  DateTime @default(now())
+}
+
+// ========== DOMAIN 10 — COMMUNICATION ==========
+model Message {
+  id          String   @id @default(cuid())
+  channel     String   // email, whatsapp, telegram, instagram
+  candidateId String?
+  threadId    String?
+  direction   String   // inbound, outbound
+  content     String?
+  externalId  String?
+  createdAt   DateTime @default(now())
+}
+
+model MessageChannel {
+  id        String   @id @default(cuid())
+  type      String
+  config    Json?
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // task_deadline, payment_overdue, visa_reminder, document_missing
+  title     String
+  body      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model NotificationSetting {
+  id       String @id @default(cuid())
+  userId   String
+  channel  String
+  type     String
+  enabled  Boolean @default(true)
+}
+
+// ========== DOMAIN 11 — TASK MANAGEMENT ==========
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  status      String   @default("todo") // todo, in_progress, completed, cancelled
+  priority    String?  // low, medium, high
+  deadline    DateTime?
+  creatorId   String?
+  candidateId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  creator     User?    @relation("TaskCreator", fields: [creatorId], references: [id])
+  assignments TaskAssignment[]
+  comments    TaskComment[]
+}
+
+model TaskAssignment {
+  id       String   @id @default(cuid())
+  taskId   String
+  userId   String
+  assignedAt DateTime @default(now())
+  task     Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([taskId, userId])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  content   String
+  authorId  String?
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+// ========== DOMAIN 12 — ANALYTICS ==========
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  name      String
+  payload   Json?
+  userId    String?
+  createdAt DateTime @default(now())
+}
+
+model AnalyticsReport {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  config    Json?
+  generatedAt DateTime @default(now())
+}
+
+model PipelineReport {
+  id        String   @id @default(cuid())
+  period    String
+  stage     String
+  count     Int
+  conversion Decimal?
+  generatedAt DateTime @default(now())
+}
+
+// ========== DOMAIN 13 — AUTOMATION ==========
+model AutomationRule {
+  id        String   @id @default(cuid())
+  name      String
+  trigger   String
+  conditions Json?
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model AutomationTrigger {
+  id     String @id @default(cuid())
+  ruleId String
+  event  String
+  config Json?
+}
+
+model AutomationAction {
+  id     String @id @default(cuid())
+  ruleId String
+  type   String
+  config Json?
+}
+
+model WorkflowState {
+  id        String   @id @default(cuid())
+  name      String
+  entity    String
+  config    Json?
+}
+

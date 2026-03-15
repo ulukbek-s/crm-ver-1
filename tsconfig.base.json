@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@platform/database": ["packages/database/src"],
+      "@platform/common": ["packages/common/src"],
+      "@platform/config": ["packages/config/src"],
+      "@platform/messaging": ["packages/messaging/src"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "**/node_modules"]
+}

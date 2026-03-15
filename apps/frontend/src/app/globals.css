@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --sidebar: 220 18% 12%;
+  --surface: 220 14% 96%;
+  --primary: 221 83% 53%;
+  --muted: 220 9% 46%;
+  --card: 0 0% 100%;
+  --border: 220 13% 91%;
+}
+
+.dark {
+  --sidebar: 220 18% 8%;
+  --surface: 220 14% 9%;
+  --primary: 221 83% 58%;
+  --muted: 220 9% 55%;
+  --card: 220 14% 12%;
+  --border: 220 13% 20%;
+}
+
+body {
+  font-feature-settings: "rlig" 1, "calt" 1;
+  color: rgb(31 41 55); /* gray-800 — читаемый текст на светлом фоне */
+}
+
+.dark body {
+  color: rgb(243 244 246); /* gray-100 */
+}
+
+/* Все поля ввода: тёмный читаемый текст (не светло-серый) */
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  color: rgb(17 24 39); /* gray-900 */
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark select,
+.dark textarea {
+  color: rgb(243 244 246); /* gray-100 */
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgb(107 114 128); /* gray-500 */
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: rgb(156 163 175); /* gray-400 */
+}
+
+/* Улучшенная читаемость вторичного текста */
+.text-muted-safe {
+  color: rgb(55 65 81); /* gray-700 вместо gray-500 */
+}
+
+.dark .text-muted-safe {
+  color: rgb(209 213 219); /* gray-300 */
+}
+
+/* Tab-style workspace */
+.workspace-tabs {
+  @apply flex items-center gap-0.5 border-b border-gray-200 bg-white px-2 dark:bg-gray-900 dark:border-gray-700;
+}
+
+.workspace-tab {
+  @apply px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent -mb-px hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:border-gray-600;
+}
+
+.workspace-tab.active {
+  @apply text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400;
+}
